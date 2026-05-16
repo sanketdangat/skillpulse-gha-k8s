@@ -8,42 +8,49 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Source
+      # --------------------------------
+      # SOURCE CODE CHECKOUT
+      # --------------------------------
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
       # --------------------------------
-      # Secret Scan
+      # SECRETS SCANNING (GITLEAKS)
+      # Detects exposed secrets like API keys, tokens, passwords
       # --------------------------------
-      - name: Gitleaks
+      - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # --------------------------------
-      # SAST Scan
+      # STATIC APPLICATION SECURITY TESTING (SAST)
+      # Detects insecure code patterns, vulnerabilities, and bad practices
       # --------------------------------
-      - name: Semgrep
+      - name: Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/ci"
 
       # --------------------------------
-      # Dockerfile Lint
+      # DOCKERFILE LINTING (HADOLINT)
+      # Validates Docker best practices, security issues, and image hygiene
       # --------------------------------
-      - name: Hadolint Backend
+      - name: Hadolint - Backend Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: backend/Dockerfile
 
-      - name: Hadolint Frontend
+      - name: Hadolint - Frontend Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: frontend/Dockerfile
 
       # --------------------------------
-      # Setup Go
+      # SETUP GO ENVIRONMENT
+      # Required for Go linting, testing, and vulnerability checks
       # --------------------------------
-      - name: Setup Go
+      - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
           go-version: "1.26"
@@ -51,16 +58,26 @@ jobs:
           cache-dependency-path: backend/go.sum
 
       # --------------------------------
-      # Go Vet
+      # STATIC ANALYSIS (GO VET)
+      # Detects common Go bugs and suspicious constructs
       # --------------------------------
-      - name: Go Vet
+      - name: Go Vet (Static Analysis)
         working-directory: ./backend
         run: go vet ./...
 
       # --------------------------------
-      # Dependency Vulnerability Scan
+      # UNIT TEST EXECUTION
+      # Runs all Go unit tests with verbose output
       # --------------------------------
-      - name: Govulncheck
+      - name: Run Go Tests
+        working-directory: ./backend
+        run: go test ./... -v
+
+      # --------------------------------
+      # DEPENDENCY VULNERABILITY SCAN (GOVULNCHECK)
+      # Detects known CVEs in Go dependencies
+      # --------------------------------
+      - name: Go Vulnerability Scan
         working-directory: ./backend
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
