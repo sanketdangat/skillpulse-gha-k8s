@@ -1,0 +1,74 @@
+name: Security & Quality Checks
+
+on:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      # --------------------------------
+      # Secret Scan
+      # --------------------------------
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # --------------------------------
+      # SAST Scan
+      # --------------------------------
+      - name: Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/ci"
+
+      # --------------------------------
+      # Dockerfile Lint
+      # --------------------------------
+      - name: Hadolint Backend
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: backend/Dockerfile
+
+      - name: Hadolint Frontend
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: frontend/Dockerfile
+
+      # --------------------------------
+      # Setup Go
+      # --------------------------------
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      # --------------------------------
+      # Go Lint
+      # --------------------------------
+      - name: GolangCI-Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: ./backend
+
+      # --------------------------------
+      # Go Tests
+      # --------------------------------
+      - name: Go Test
+        working-directory: ./backend
+        run: go test ./... -v
+
+      # --------------------------------
+      # Dependency Vulnerability Scan
+      # --------------------------------
+      - name: Govulncheck
+        working-directory: ./backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
