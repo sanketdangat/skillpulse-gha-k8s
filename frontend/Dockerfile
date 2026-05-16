@@ -1,9 +1,13 @@
 # FROM nginx:1.27.5-alpine
 
 # FROM nginxinc/nginx-unprivileged:1.27.5-alpine
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+# FROM nginxinc/nginx-unprivileged:1.27-alpine
+
+FROM nginxinc/nginx-unprivileged:stable-alpine
+
 COPY index.html /usr/share/nginx/html/
 COPY css/ /usr/share/nginx/html/css/
 COPY js/ /usr/share/nginx/html/js/
-
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+USER 101

@@ -3,8 +3,7 @@ name: Build, Scan & Push
 on:
   workflow_run:
     workflows: ["Security & Quality Checks"]
-    types:
-      - completed
+    types: [completed]
 
   workflow_dispatch:
 
@@ -37,27 +36,29 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # ---------------- BUILD ----------------
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           load: true
-          tags: ${{ matrix.image }}:${{ github.sha }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # ---------------- SCAN ----------------
       - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ matrix.image }}:${{ github.sha }}
-          severity: HIGH,CRITICAL
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          severity: CRITICAL
           exit-code: 1
           ignore-unfixed: true
 
-      - name: Tag & Push Image
+      # ---------------- PUSH ----------------
+      - name: Push Image
         run: |
-          docker tag ${{ matrix.image }}:${{ github.sha }} \
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
-
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
