@@ -7,28 +7,33 @@ on:
   workflow_dispatch:
 
 jobs:
+
+  # -------------------------
+  # SECURITY + CODE QUALITY
+  # Runs all security scans before build
+  # -------------------------
   security:
     name: Security + Code Quality
     runs-on: ubuntu-latest
 
     steps:
-      # CHECKOUT SOURCE CODE
+      # Checkout source code
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      # SECRET SCANNING
+      # Detect secrets (API keys, tokens, passwords)
       - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # SAST SCAN
+      # Static Application Security Testing
       - name: Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/ci"
 
-      # DOCKERFILE LINTING
+      # Dockerfile best practice checks
       - name: Hadolint Backend
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -39,7 +44,7 @@ jobs:
         with:
           dockerfile: frontend/Dockerfile
 
-      # GO SETUP
+      # Setup Go runtime for backend analysis
       - name: Setup Go Environment
         uses: actions/setup-go@v5
         with:
@@ -47,18 +52,22 @@ jobs:
           cache: true
           cache-dependency-path: backend/go.sum
 
-      # STATIC ANALYSIS
+      # Detect Go code issues
       - name: Go Vet
         working-directory: ./backend
         run: go vet ./...
 
-      # DEPENDENCY VULNERABILITY SCAN
+      # Detect known Go vulnerabilities (CVEs)
       - name: Go Vulnerability Scan
         working-directory: ./backend
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
           $(go env GOPATH)/bin/govulncheck ./...
 
+  # -------------------------
+  # BUILD + SCAN + PUSH
+  # Builds Docker images, scans them, and pushes to registry
+  # -------------------------
   build:
     name: Build + Scan + Push
     runs-on: ubuntu-latest
@@ -77,39 +86,58 @@ jobs:
             image: skillpulse-frontend
 
     steps:
+      # Checkout source code
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      # Generate short commit SHA for Docker tagging
+      - name: Set SHORT SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+
+      # Enable Docker build optimization
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Login to DockerHub registry
       - name: DockerHub Login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # BUILD IMAGE
+      # Build Docker image (with cache enabled)
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
           context: ${{ matrix.context }}
           load: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.SHORT_SHA }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      # TRIVY SCAN
-      - name: Trivy Scan
+      # Security scan of built image
+      - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.SHORT_SHA }}
           severity: CRITICAL
           exit-code: 1
           ignore-unfixed: true
 
-      # PUSH IMAGE
+      # Push image to DockerHub
       - name: Push Image
         run: |
-          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ env.SHORT_SHA }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+
+      # Simple GitHub UI summary
+      - name: GitHub Summary
+        if: always()
+        run: |
+          echo "## CI Summary (Security + Build)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image | Tag | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ matrix.service }} | ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }} | ${{ env.SHORT_SHA }} | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
