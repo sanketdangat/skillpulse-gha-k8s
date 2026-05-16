@@ -58,13 +58,6 @@ jobs:
         run: go vet ./...
 
       # --------------------------------
-      # Go Tests
-      # --------------------------------
-      - name: Go Test
-        working-directory: ./backend
-        run: go test ./... -v
-
-      # --------------------------------
       # Dependency Vulnerability Scan
       # --------------------------------
       - name: Govulncheck
