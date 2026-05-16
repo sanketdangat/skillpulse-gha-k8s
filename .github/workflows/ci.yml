@@ -7,22 +7,28 @@ on:
   workflow_dispatch:
 
 jobs:
-
   security:
     name: Security + Code Quality
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      # CHECKOUT SOURCE CODE
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-      - name: Gitleaks
+      # SECRET SCANNING
+      - name: Gitleaks Secret Scan
         uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Semgrep
+      # SAST SCAN
+      - name: Semgrep SAST Scan
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/ci"
 
+      # DOCKERFILE LINTING
       - name: Hadolint Backend
         uses: hadolint/hadolint-action@v3.1.0
         with:
@@ -33,10 +39,20 @@ jobs:
         with:
           dockerfile: frontend/Dockerfile
 
+      # GO SETUP
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      # STATIC ANALYSIS
       - name: Go Vet
         working-directory: ./backend
         run: go vet ./...
 
+      # DEPENDENCY VULNERABILITY SCAN
       - name: Go Vulnerability Scan
         working-directory: ./backend
         run: |
@@ -61,17 +77,19 @@ jobs:
             image: skillpulse-frontend
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-      - name: Docker Setup
+      - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Docker Login
+      - name: DockerHub Login
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # BUILD IMAGE
       - name: Build Image
         uses: docker/build-push-action@v6
         with:
@@ -81,6 +99,7 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
 
+      # TRIVY SCAN
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -89,15 +108,8 @@ jobs:
           exit-code: 1
           ignore-unfixed: true
 
+      # PUSH IMAGE
       - name: Push Image
         run: |
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
-
-      - name: GitHub Summary
-        if: always()
-        run: |
-          echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Service | Image | Tag | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ matrix.service }} | ${{ matrix.image }} | ${GITHUB_SHA::7} | Success |" >> $GITHUB_STEP_SUMMARY
