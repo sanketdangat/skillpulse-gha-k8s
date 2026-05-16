@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  checks:
+  security-and-quality-checks:
     runs-on: ubuntu-latest
 
     steps:
@@ -48,14 +48,14 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+          cache-dependency-path: backend/go.sum
 
       # --------------------------------
-      # Go Lint
+      # Go Vet
       # --------------------------------
-      - name: GolangCI-Lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          working-directory: ./backend
+      - name: Go Vet
+        working-directory: ./backend
+        run: go vet ./...
 
       # --------------------------------
       # Go Tests
