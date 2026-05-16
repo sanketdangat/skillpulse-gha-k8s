@@ -1,77 +1,77 @@
-# name: CI - Build, Scan & Push Docker Images
+name: CI - Build, Scan & Push Docker Images
 
-# on:
-#   workflow_run:
-#     workflows: ["Security + Code Quality Checks"]
-#     types: [completed]
+on:
+  workflow_run:
+    workflows: ["Security + Code Quality Checks"]
+    types: [completed]
 
-#   workflow_dispatch:
+  # workflow_dispatch:
 
-# jobs:
-#   build:
-#     runs-on: ubuntu-latest
+jobs:
+  build:
+    runs-on: ubuntu-latest
 
-#     strategy:
-#       fail-fast: false
-#       matrix:
-#         include:
-#           - service: backend
-#             context: ./backend
-#             image: skillpulse-backend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: ./backend
+            image: skillpulse-backend
 
-#           - service: frontend
-#             context: ./frontend
-#             image: skillpulse-frontend
+          - service: frontend
+            context: ./frontend
+            image: skillpulse-frontend
 
-#     steps:
-#       # ---------------- CHECKOUT ----------------
-#       - name: Checkout Source
-#         uses: actions/checkout@v4
+    steps:
+      # ---------------- CHECKOUT ----------------
+      - name: Checkout Source
+        uses: actions/checkout@v4
 
-#       # ---------------- DOCKER SETUP ----------------
-#       - name: Set up Docker Buildx
-#         uses: docker/setup-buildx-action@v3
+      # ---------------- DOCKER SETUP ----------------
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-#       # ---------------- LOGIN ----------------
-#       - name: DockerHub Login
-#         uses: docker/login-action@v3
-#         with:
-#           username: ${{ secrets.DOCKERHUB_USERNAME }}
-#           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      # ---------------- LOGIN ----------------
+      - name: DockerHub Login
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-#       # ---------------- BUILD ----------------
-#       - name: Build Image
-#         uses: docker/build-push-action@v6
-#         with:
-#           context: ${{ matrix.context }}
-#           load: true
-#           tags: |
-#             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
-#             ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
-#           cache-from: type=gha
-#           cache-to: type=gha,mode=max
+      # ---------------- BUILD ----------------
+      - name: Build Image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          load: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-#       # ---------------- SCAN ----------------
-#       - name: Trivy Image Scan
-#         uses: aquasecurity/trivy-action@master
-#         with:
-#           image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
-#           severity: CRITICAL
-#           exit-code: 1
-#           ignore-unfixed: true
+      # ---------------- SCAN ----------------
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          severity: CRITICAL
+          exit-code: 1
+          ignore-unfixed: true
 
-#       # ---------------- PUSH ----------------
-#       - name: Push Image
-#         run: |
-#           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
-#           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
+      # ---------------- PUSH ----------------
+      - name: Push Image
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:${{ github.sha }}
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}:latest
 
-#       # ---------------- SUMMARY ----------------
-#       - name: GitHub Summary
-#         if: always()
-#         run: |
-#           echo "## Build & Scan Summary" >> $GITHUB_STEP_SUMMARY
-#           echo "" >> $GITHUB_STEP_SUMMARY
-#           echo "| Service | Image | Tag | Status |" >> $GITHUB_STEP_SUMMARY
-#           echo "|----------|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
-#           echo "| ${{ matrix.service }} | ${{ matrix.image }} | ${GITHUB_SHA::7} | Success |" >> $GITHUB_STEP_SUMMARY
+      # ---------------- SUMMARY ----------------
+      - name: GitHub Summary
+        if: always()
+        run: |
+          echo "## Build & Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | Image | Tag | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ matrix.service }} | ${{ matrix.image }} | ${GITHUB_SHA::7} | Success |" >> $GITHUB_STEP_SUMMARY

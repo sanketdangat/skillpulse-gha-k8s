@@ -1,84 +1,84 @@
-# # name: Security + Code Quality Checks
+name: Security + Code Quality Checks
 
-# # on:
-# #   workflow_dispatch:
-# #   push:
-# #     branches: ["main"]
-# #   pull_request:
+on:
+  # workflow_dispatch:
+  push:
+    branches: ["main"]
+  # pull_request:
 
-# # jobs:
-# #   security-and-quality:
-# #     runs-on: ubuntu-latest
+jobs:
+  security-and-quality:
+    runs-on: ubuntu-latest
 
-#     steps:
-#       # CHECKOUT SOURCE CODE
-#       - name: Checkout Source Code
-#         uses: actions/checkout@v4
+    steps:
+      # CHECKOUT SOURCE CODE
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-#       # SECRET SCANNING
-#       - name: Gitleaks Secret Scan
-#         uses: gitleaks/gitleaks-action@v2
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # SECRET SCANNING
+      - name: Gitleaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-#       # SAST SCAN
-#       - name: Semgrep SAST Scan
-#         uses: returntocorp/semgrep-action@v1
-#         with:
-#           config: "p/ci"
+      # SAST SCAN
+      - name: Semgrep SAST Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: "p/ci"
 
-#       # DOCKERFILE LINTING
-#       - name: Hadolint Backend
-#         uses: hadolint/hadolint-action@v3.1.0
-#         with:
-#           dockerfile: backend/Dockerfile
+      # DOCKERFILE LINTING
+      - name: Hadolint Backend
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: backend/Dockerfile
 
-#       - name: Hadolint Frontend
-#         uses: hadolint/hadolint-action@v3.1.0
-#         with:
-#           dockerfile: frontend/Dockerfile
+      - name: Hadolint Frontend
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: frontend/Dockerfile
 
-#       # GO SETUP
-#       - name: Setup Go Environment
-#         uses: actions/setup-go@v5
-#         with:
-#           go-version: "1.26"
-#           cache: true
-#           cache-dependency-path: backend/go.sum
+      # GO SETUP
+      - name: Setup Go Environment
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+          cache-dependency-path: backend/go.sum
 
-#       # STATIC ANALYSIS
-#       - name: Go Vet
-#         working-directory: ./backend
-#         run: go vet ./...
+      # STATIC ANALYSIS
+      - name: Go Vet
+        working-directory: ./backend
+        run: go vet ./...
 
-#       # DEPENDENCY VULNERABILITY SCAN
-#       - name: Go Vulnerability Scan
-#         working-directory: ./backend
-#         run: |
-#           go install golang.org/x/vuln/cmd/govulncheck@latest
-#           govulncheck ./...
+      # DEPENDENCY VULNERABILITY SCAN
+      - name: Go Vulnerability Scan
+        working-directory: ./backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
 
-# #       # SUMMARY REPORT
-# #       - name: Security + Code Quality Summary
-# #         if: always()
-# #         run: |
-# #           echo "## Security + Code Quality" >> $GITHUB_STEP_SUMMARY
-# #           echo "" >> $GITHUB_STEP_SUMMARY
+      # SUMMARY REPORT
+      - name: Security + Code Quality Summary
+        if: always()
+        run: |
+          echo "## Security + Code Quality" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
 
-# #           echo "### Security" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
-# #           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Gitleaks | Completed |" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Semgrep | Completed |" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Govulncheck | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "### Security" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Gitleaks | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Semgrep | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Govulncheck | Completed |" >> $GITHUB_STEP_SUMMARY
 
-# #           echo "" >> $GITHUB_STEP_SUMMARY
-# #           echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
-# #           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Go Vet | Completed |" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Hadolint (Backend) | Completed |" >> $GITHUB_STEP_SUMMARY
-# #           echo "| Hadolint (Frontend) | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
+          echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Go Vet | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Hadolint (Backend) | Completed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Hadolint (Frontend) | Completed |" >> $GITHUB_STEP_SUMMARY
 
-# #           echo "" >> $GITHUB_STEP_SUMMARY
-# #           echo "Result: Security + Code Quality checks completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Result: Security + Code Quality checks completed" >> $GITHUB_STEP_SUMMARY
