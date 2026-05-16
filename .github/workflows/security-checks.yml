@@ -1,84 +1,84 @@
-name: Security & Quality Checks
+# name: Security + Code Quality Checks
 
-on:
-  workflow_dispatch:
+# on:
+#   workflow_dispatch:
+#   push:
+#     branches: ["main"]
+#   pull_request:
 
-jobs:
-  security-and-quality-checks:
-    runs-on: ubuntu-latest
+# jobs:
+#   security-and-quality:
+#     runs-on: ubuntu-latest
 
-    steps:
-      # --------------------------------
-      # SOURCE CODE CHECKOUT
-      # --------------------------------
-      - name: Checkout Source Code
-        uses: actions/checkout@v4
+#     steps:
+#       # CHECKOUT SOURCE CODE
+#       - name: Checkout Source Code
+#         uses: actions/checkout@v4
 
-      # --------------------------------
-      # SECRETS SCANNING (GITLEAKS)
-      # Detects exposed secrets like API keys, tokens, passwords
-      # --------------------------------
-      - name: Gitleaks Secret Scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#       # SECRET SCANNING
+#       - name: Gitleaks Secret Scan
+#         uses: gitleaks/gitleaks-action@v2
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # --------------------------------
-      # STATIC APPLICATION SECURITY TESTING (SAST)
-      # Detects insecure code patterns, vulnerabilities, and bad practices
-      # --------------------------------
-      - name: Semgrep SAST Scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: "p/ci"
+#       # SAST SCAN
+#       - name: Semgrep SAST Scan
+#         uses: returntocorp/semgrep-action@v1
+#         with:
+#           config: "p/ci"
 
-      # --------------------------------
-      # DOCKERFILE LINTING (HADOLINT)
-      # Validates Docker best practices, security issues, and image hygiene
-      # --------------------------------
-      - name: Hadolint - Backend Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: backend/Dockerfile
+#       # DOCKERFILE LINTING
+#       - name: Hadolint Backend
+#         uses: hadolint/hadolint-action@v3.1.0
+#         with:
+#           dockerfile: backend/Dockerfile
 
-      - name: Hadolint - Frontend Dockerfile
-        uses: hadolint/hadolint-action@v3.1.0
-        with:
-          dockerfile: frontend/Dockerfile
+#       - name: Hadolint Frontend
+#         uses: hadolint/hadolint-action@v3.1.0
+#         with:
+#           dockerfile: frontend/Dockerfile
 
-      # --------------------------------
-      # SETUP GO ENVIRONMENT
-      # Required for Go linting, testing, and vulnerability checks
-      # --------------------------------
-      - name: Setup Go Environment
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.26"
-          cache: true
-          cache-dependency-path: backend/go.sum
+#       # GO SETUP
+#       - name: Setup Go Environment
+#         uses: actions/setup-go@v5
+#         with:
+#           go-version: "1.26"
+#           cache: true
+#           cache-dependency-path: backend/go.sum
 
-      # --------------------------------
-      # STATIC ANALYSIS (GO VET)
-      # Detects common Go bugs and suspicious constructs
-      # --------------------------------
-      - name: Go Vet (Static Analysis)
-        working-directory: ./backend
-        run: go vet ./...
+#       # STATIC ANALYSIS
+#       - name: Go Vet
+#         working-directory: ./backend
+#         run: go vet ./...
 
-      # --------------------------------
-      # UNIT TEST EXECUTION
-      # Runs all Go unit tests with verbose output
-      # --------------------------------
-      - name: Run Go Tests
-        working-directory: ./backend
-        run: go test ./... -v
+#       # DEPENDENCY VULNERABILITY SCAN
+#       - name: Go Vulnerability Scan
+#         working-directory: ./backend
+#         run: |
+#           go install golang.org/x/vuln/cmd/govulncheck@latest
+#           govulncheck ./...
 
-      # --------------------------------
-      # DEPENDENCY VULNERABILITY SCAN (GOVULNCHECK)
-      # Detects known CVEs in Go dependencies
-      # --------------------------------
-      - name: Go Vulnerability Scan
-        working-directory: ./backend
-        run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+#       # SUMMARY REPORT
+#       - name: Security + Code Quality Summary
+#         if: always()
+#         run: |
+#           echo "## Security + Code Quality" >> $GITHUB_STEP_SUMMARY
+#           echo "" >> $GITHUB_STEP_SUMMARY
+
+#           echo "### Security" >> $GITHUB_STEP_SUMMARY
+#           echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
+#           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+#           echo "| Gitleaks | Completed |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Semgrep | Completed |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Govulncheck | Completed |" >> $GITHUB_STEP_SUMMARY
+
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "### Code Quality" >> $GITHUB_STEP_SUMMARY
+#           echo "| Tool | Status |" >> $GITHUB_STEP_SUMMARY
+#           echo "|------|--------|" >> $GITHUB_STEP_SUMMARY
+#           echo "| Go Vet | Completed |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Hadolint (Backend) | Completed |" >> $GITHUB_STEP_SUMMARY
+#           echo "| Hadolint (Frontend) | Completed |" >> $GITHUB_STEP_SUMMARY
+
+#           echo "" >> $GITHUB_STEP_SUMMARY
+#           echo "Result: Security + Code Quality checks completed" >> $GITHUB_STEP_SUMMARY

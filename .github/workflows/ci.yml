@@ -41,7 +41,7 @@ jobs:
         working-directory: ./backend
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          $(go env GOPATH)/bin/govulncheck ./...
 
   build:
     name: Build + Scan + Push
