@@ -12,7 +12,7 @@ on:
 jobs:
 
   # -------------------------
-  # 🔐 HARD SECURITY GATE
+  # 🔐 SECURITY GATE (BLOCKING)
   # -------------------------
   secrets:
     name: Secrets Scan (Gitleaks)
@@ -32,7 +32,7 @@ jobs:
 
 
   # -------------------------
-  # 🧹 LINT (FAST GATE)
+  # 🧹 LINT (BLOCKING)
   # -------------------------
   lint:
     name: Dockerfile Lint
@@ -57,7 +57,7 @@ jobs:
 
 
   # -------------------------
-  # ⚡ BUILD (STARTS EARLY)
+  # 🚀 BUILD (FAST START)
   # -------------------------
   build:
     name: Build + Scan + Push Docker Images
@@ -97,8 +97,8 @@ jobs:
           tags: |
             ${{ env.IMAGE }}:${{ env.SHORT_SHA }}
             ${{ env.IMAGE }}:latest
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,scope=${{ matrix.service }},mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
@@ -135,6 +135,12 @@ jobs:
           go-version-file: backend/go.mod
           cache: true
 
+      - name: Cache govulncheck
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin/govulncheck
+          key: govulncheck-v1
+
       - name: Go Vet
         working-directory: backend
         run: go vet ./...
@@ -142,7 +148,9 @@ jobs:
       - name: Govulncheck
         working-directory: backend
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@v1
+          if ! command -v govulncheck; then
+            go install golang.org/x/vuln/cmd/govulncheck@v1
+          fi
           govulncheck -mode=source ./...
 
 
