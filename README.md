@@ -15,22 +15,39 @@
 
 ## Project Overview
 
-SkillPulse is a three-tier web application that allows users to track the skills they are learning and the time invested in each skill. The application layer is intentionally lightweight, consisting of a Go backend API, a vanilla JavaScript frontend served via Nginx, and a MySQL database.
+SkillPulse is a production-oriented, cloud-native three-tier application deployed on Amazon EKS using modern DevOps and GitOps practices.
 
-The primary value of this repository lies in the platform engineering layer built around the application. It focuses on secure infrastructure provisioning, GitOps-based delivery, automated security enforcement, secret management, and fully automated cloud-native deployments on Kubernetes.
+The application enables users to track the skills they are learning along with the time invested in developing each skill.
+
+The application stack consists of:
+
+- Go backend API
+- Vanilla JavaScript frontend served through Nginx
+- MySQL database
+
+Beyond the application itself, the primary focus of this repository is the Kubernetes platform engineering ecosystem built around it, including:
+
+- Amazon EKS
+- Terraform infrastructure provisioning
+- GitOps deployments using ArgoCD
+- GitHub Actions CI/CD automation
+- AWS-native ingress, storage, and secret management
+- Monitoring and observability
+- Security automation and vulnerability scanning
 
 ---
 
-## What Already Existed
+## Original Project Foundation
 
-This project is forked from `LondheShubham153/github-actions-kubernetes-masterclass`, which provided the initial application baseline and a simple deployment approach.
-
-It included:
+This repository is derived from `LondheShubham153/github-actions-kubernetes-masterclass`, which originally provided:
 
 - Dockerfile for the Go backend service
 - Dockerfile for the Nginx frontend service
-- docker-compose.yml for local three-tier development
-- A basic CI/CD pipeline that deployed the application via SSH and executed `docker compose up` on every push to `main`
+- `docker-compose.yml` for local development
+- A basic GitHub Actions pipeline
+- SSH-based deployment workflow using Docker Compose on a remote VM
+
+The original implementation has since been extensively redesigned into a production-style Kubernetes and GitOps platform running on Amazon EKS.
 
 ---
 
@@ -61,251 +78,326 @@ The result is a **complete cloud-native deployment platform** that reflects mode
 
 ---
 
-## SkillPulse Architecture
-
-```mermaid
-graph TD
-
-%% =====================================================
-%% NETWORK SUMMARY (DETAILED CIDR INFO)
-%% =====================================================
-
-CIDR_VPC["AWS VPC: 10.0.0.0/16<br/>Used by: EC2 Worker Nodes, Pods (via VPC CNI using VPC IPs), ALB, NAT Gateway"]
-CIDR_SVC["Kubernetes Service CIDR: 172.20.0.0/16<br/>Used by: ClusterIP Services (frontend, backend, mysql)<br/>Internal-only Kubernetes service networking (not routable in VPC)"]
-
-%% =====================================================
-%% EDGE / INTERNET LAYER
-%% =====================================================
-
-User["End User (https://skillpulse.cloud2devops.online)"] --> Route53["Amazon Route 53"]
-Route53 --> ALB["AWS Application Load Balancer"]
-
-ACM["AWS Certificate Manager"] -.->|TLS Certificate| ALB
-
-%% =====================================================
-%% AWS CLOUD
-%% =====================================================
-
-subgraph AWS["AWS Cloud (ap-south-1)"]
-
-    %% =================================================
-    %% EKS CLUSTER
-    %% =================================================
-
-    subgraph EKS["Amazon EKS Cluster (dev-skillpulse-eks)"]
-
-        %% CONTROL PLANE
-        subgraph ControlPlane["Managed EKS Control Plane"]
-
-            APIServer["Kubernetes API Server"]
-
-        end
-
-        %% ADDONS
-        subgraph Addons["Cluster Add-ons"]
-
-            LBC["AWS Load Balancer Controller"]
-            EBSCSI["Amazon EBS CSI Driver"]
-            ASCP["Secrets Store CSI Driver + AWS Provider"]
-            PodIdentity["EKS Pod Identity Agent"]
-            Metrics["Metrics Server"]
-
-        end
-
-        %% INGRESS
-        Ingress["Kubernetes Ingress"]
-
-        %% =============================================
-        %% APPLICATION NAMESPACE
-        %% =============================================
-
-        subgraph SkillPulse["Namespace: skillpulse"]
-
-            FE_SVC["frontend-service (ClusterIP)"]
-            FE_POD["Frontend Pod"]
-
-            BE_SVC["backend-service (ClusterIP)"]
-            BE_POD["Backend Pod"]
-
-            MYSQL_SVC["mysql-service (ClusterIP)"]
-            MYSQL_STS["MySQL StatefulSet"]
-
-            PVC["PersistentVolumeClaim"]
-
-            SA["skillpulse-sa"]
-            SPC["SecretProviderClass"]
-
-            FE_SVC --> FE_POD
-            BE_SVC --> BE_POD
-
-            MYSQL_SVC --> MYSQL_STS
-
-            FE_POD -->|API Calls| BE_SVC
-            BE_POD -->|SQL Queries| MYSQL_SVC
-
-            MYSQL_STS --> PVC
-
-        end
-
-        %% =============================================
-        %% ARGOCD
-        %% =============================================
-
-        subgraph ArgoNS["Namespace: argocd"]
-
-            ArgoSvc["ArgoCD Server Service"]
-            ArgoCD["ArgoCD Server"]
-
-            ArgoSvc --> ArgoCD
-
-        end
-
-        %% =============================================
-        %% MONITORING
-        %% =============================================
-
-        subgraph MonitorNS["Namespace: monitoring"]
-
-            GrafSvc["grafana-service"]
-            Grafana["Grafana Pod"]
-
-            Prometheus["Prometheus Pod"]
-
-            GrafSvc --> Grafana
-
-            Grafana -->|Query Metrics| Prometheus
-
-            Prometheus -->|Scrape Metrics| FE_POD
-            Prometheus -->|Scrape Metrics| BE_POD
-
-        end
-
-    end
-
-    %% =================================================
-    %% STORAGE
-    %% =================================================
-
-    EBS["Amazon EBS Volume (gp3)"]
-
-    PVC --> EBSCSI
-    EBSCSI --> EBS
-
-    %% =================================================
-    %% SECURITY
-    %% =================================================
-
-    subgraph Security["Security & Identity"]
-
-        ASM["AWS Secrets Manager"]
-        IAMRole["IAM Role: skillpulse-db-secrets-role"]
-
-    end
-
-    %% =================================================
-    %% AMAZON ECR
-    %% =================================================
-
-    ECR["Amazon ECR"]
-
-end
-
-%% =====================================================
-%% INGRESS / ALB FLOW
-%% =====================================================
-
-LBC -->|Creates & Manages| ALB
-
-ALB --> Ingress
-
-Ingress -->|skillpulse.cloud2devops.online| FE_SVC
-Ingress -->|argocd.cloud2devops.online| ArgoSvc
-Ingress -->|grafana.cloud2devops.online| GrafSvc
-
-%% =====================================================
-%% POD IDENTITY & SECRETS FLOW
-%% =====================================================
-
-BE_POD --> SA
-SA -->|Pod Identity Association| IAMRole
-IAMRole --> ASM
-
-SPC --> ASCP
-ASCP --> ASM
-ASCP -->|Mount Secrets| BE_POD
-
-%% =====================================================
-%% IMAGE PULL FLOW
-%% =====================================================
-
-FE_POD -.->|Pull Image| ECR
-BE_POD -.->|Pull Image| ECR
-
-%% =====================================================
-%% GITHUB ACTIONS / CI-CD
-%% =====================================================
-
-subgraph GitHub["GitHub Actions CI-CD"]
-
-    GitRepo["GitHub Repository"]
-
-    CI["CI Pipeline<br/>- Security Scan<br/>- Build Docker Image<br/>- Push to ECR"]
-
-    CD["CD Pipeline<br/>- Update Kubernetes Manifests<br/>- Commit GitOps Changes"]
-
-end
-
-Developer["Developer"] -->|Push Code| GitRepo
-
-GitRepo --> CI
-
-CI --> ECR
-
-CI --> CD
-
-CD --> GitRepo
-
-%% =====================================================
-%% GITOPS FLOW
-%% =====================================================
-
-GitRepo -->|Watch Desired State| ArgoCD
-
-ArgoCD -->|Apply Kubernetes Manifests| APIServer
-
-APIServer --> FE_POD
-APIServer --> BE_POD
-APIServer --> MYSQL_STS
-APIServer --> Grafana
+# SkillPulse Architecture Diagram
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          EXTERNAL ENDPOINTS (Internet)                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────┐  ┌────────────────────────────────┐     │
+│  │ skillpulse.cloud2devops.online │  │ argocd.cloud2devops.online     │     │
+│  └────────────────────────────────┘  └────────────────────────────────┘     │
+│                                                                             │
+│               ┌────────────────────────────────┐                            │
+│               │ grafana.cloud2devops.online    │                            │
+│               └────────────────────────────────┘                            │
+│                                   ↓                                         │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │          Amazon Route53 (DNS) + AWS ACM (TLS Certificates)            │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      ↓
+┌─────────────────────────────────────────────────────────────────────────────┐
+│              AWS REGION (ap-south-1) - VPC Infrastructure                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                AWS Application Load Balancer (ALB)                   │   │
+│  │         [Shared ALB Group - cloud2devops-ingress-alb]                │   │
+│  │         Managed by AWS Load Balancer Controller (LBC)                │   │
+│  └──────────────────────────────────────────────────────────────────────┘   │
+│      Routes traffic based on hostname rules                                 │ 
+│                                                                             │
+│  ┌──────────────────────────────────────────────────────────────────────┐   │
+│  │                         Amazon EKS Cluster                           │   │
+│  │              (Kubernetes Control Plane - AWS Managed)                │   │
+│  ├──────────────────────────────────────────────────────────────────────┤   │
+│  │                                                                      │   │
+│  │  ┌────────────────────────────────────────────────────────────────┐  │   │
+│  │  │                EKS Worker Nodes (Private)                      │  │   │
+│  │  │ • Auto Scaling Groups • Pod Identity Agent • CloudWatch        │  │   │
+│  │  │                                                                │  │   │
+│  │  │ ┌────────────────────────┐ ┌───────────────────────────────┐   │  │   │
+│  │  │ │ Skillpulse Namespace   │ │ System & Addon Namespaces     │   │  │   │
+│  │  │ ├────────────────────────┤ ├───────────────────────────────┤   │  │   │
+│  │  │ │                        │ │ • kube-system                 │   │  │   │
+│  │  │ │ Frontend Deployment    │ │ • kube-public                 │   │  │   │
+│  │  │ │ (Nginx + JavaScript)   │ │ • argocd                      │   │  │   │
+│  │  │ │ └─ Service (ClusterIP) │ │ • monitoring                  │   │  │   │
+│  │  │ │                        │ │                               │   │  │   │
+│  │  │ │ Backend Deployment     │ │ Core Add-ons:                 │   │  │   │
+│  │  │ │ (Go API)               │ │ • AWS Load Balancer           │   │  │   │
+│  │  │ │ └─ Service (ClusterIP) │ │   Controller (LBC)            │   │  │   │
+│  │  │ │ └─ HPA (Horizontal     │ │ • EBS CSI Driver              │   │  │   │
+│  │  │ │    Pod Autoscaling)    │ │ • Metrics Server              │   │  │   │
+│  │  │ │                        │ │ • Secrets Store CSI Driver    │   │  │   │
+│  │  │ │ MySQL StatefulSet      │ │ • ASCP (AWS Secrets           │   │  │   │
+│  │  │ │ • Service (ClusterIP)  │ │   Manager Provider)           │   │  │   │
+│  │  │ │ • PVC (EBS Volume)     │ │                               │   │  │   │
+│  │  │ │ • ConfigMap            │ │ ArgoCD:                       │   │  │   │
+│  │  │ │ • ServiceAccount       │ │ • argocd-server               │   │  │   │
+│  │  │ │                        │ │ • argocd-repo-server          │   │  │   │
+│  │  │ │ └─ Secrets (from AWS   │ │ • argocd-controller           │   │  │   │
+│  │  │ │    Secrets Manager)    │ │ • argocd-dex-server           │   │  │   │
+│  │  │ │                        │ │ • Ingress Resource            │   │  │   │
+│  │  │ │ Ingress Resource       │ │   (argocd-ingress)            │   │  │   │
+│  │  │ │ (skillpulse-ingress)   │ │                               │   │  │   │
+│  │  │ │                        │ │ Monitoring Stack:             │   │  │   │
+│  │  │ │                        │ │ • Prometheus                  │   │  │   │
+│  │  │ │                        │ │ • Grafana                     │   │  │   │
+│  │  │ │                        │ │ • Node Exporter               │   │  │   │
+│  │  │ │                        │ │ • Kube-State-Metrics          │   │  │   │
+│  │  │ │                        │ │ • Ingress Resource            │   │  │   │
+│  │  │ │                        │ │   (grafana-ingress)           │   │  │   │
+│  │  │ └────────────────────────┘ └───────────────────────────────┘   │  │   │
+│  │  │                                                                │  │   │
+│  │  │ ┌──────────────────────────────────────────────────────────┐   │  │   │
+│  │  │ │         Kubernetes Add-ons & CSI Drivers                 │   │  │   │
+│  │  │ │ • AWS Load Balancer Controller (LBC)                     │   │  │   │
+│  │  │ │ • EBS CSI Driver (Dynamic Storage Provisioning)          │   │  │   │
+│  │  │ │ • Secrets Store CSI Driver + ASCP                        │   │  │   │
+│  │  │ │ • Metrics Server (HPA & Resource Monitoring)             │   │  │   │
+│  │  │ │ • Pod Identity Agent (IAM for Pods)                      │   │  │   │
+│  │  │ └──────────────────────────────────────────────────────────┘   │  │   │
+│  │  └────────────────────────────────────────────────────────────────┘  │   │
+│  │                                                                      │   │
+│  │  ┌──────────────────────────────────────────────────────────────┐    │   │
+│  │  │                     VPC Networking                           │    │   │
+│  │  │ • Private Subnets (2 AZs) for EKS Nodes                      │    │   │
+│  │  │ • Public Subnets (2 AZs) for ALB & NAT Gateways              │    │   │
+│  │  │ • NAT Gateways for Egress Traffic                            │    │   │
+│  │  │ • Security Groups for EKS & ALB                              │    │   │
+│  │  └──────────────────────────────────────────────────────────────┘    │   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 AWS External Services & Storage                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • Amazon ECR (Elastic Container Registry)                                   │
+│   - Stores Docker images for backend & frontend                             │
+│                                                                             │
+│ • AWS Secrets Manager                                                       │
+│   - Manages database credentials and secrets                                │
+│                                                                             │
+│ • Amazon EBS (Elastic Block Storage)                                        │
+│   - Persistent volumes for MySQL database                                   │
+│                                                                             │
+│ • AWS S3 (Terraform State Backend)                                          │
+│   - Stores Terraform state files (vpc & eks)                                │
+│                                                                             │
+│ • AWS Systems Manager Parameter Store                                       │
+│   - Optional parameter storage alongside Secrets Manager                    │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## GitOps Deployment Model
+# Data Flow Architecture
 
-This project follows GitOps principles using ArgoCD.
-
-**Deployment flow:**
+## 1. User Request Flow
 
 ```text
-GitHub Actions builds container images
-            ↓
-Images pushed to Amazon ECR
-            ↓
-CD workflow updates Kubernetes manifests
-            ↓
-ArgoCD detects repository changes
-            ↓
-Kubernetes workloads automatically reconcile
+Internet User
+    ↓
+skillpulse.cloud2devops.online
+    ↓
+Route53 DNS Resolution
+    ↓
+AWS Application Load Balancer (ALB)
+    ├─ ACM TLS Certificate Attached
+    └─ TLS Termination Happens Here
+    ↓
+ALB Listener Rules (Host-based Routing)
+    ↓
+Kubernetes Ingress Resource
+    ↓
+Frontend Service (ClusterIP)
+    ↓
+Frontend Pod (Nginx + JavaScript)
+    ↓
+Backend Service (ClusterIP)
+    ↓
+Backend Pod (Go API)
+    ↓
+MySQL Service
+    ↓
+MySQL StatefulSet Pod
+
+(Response travels back through Backend → Frontend → Services → Ingress → ALB)
+
+    ↓
+HTTPS Response Returned to User
 ```
 
-This provides:
+---
 
-- Declarative deployments
-- Auditability
-- Rollback capability
-- Immutable release tracking
-- Automated synchronization
+## 2. CI/CD Deployment Flow (GitOps)
+```text
+Developer / DevOps Engineer
+    ↓
+Pushes Code to GitHub
+    ↓
+GitHub Actions CI Pipeline Triggered
+
+    ├─ Security Job
+    │   ├─ Checkout Repository
+    │   ├─ Gitleaks Secret Scan
+    │   ├─ Hadolint Scan (Backend Dockerfile)
+    │   ├─ Hadolint Scan (Frontend Dockerfile)
+    │   ├─ Setup Go Environment
+    │   └─ Govulncheck Scan
+    │
+    ├─ Build, Scan & Push Job (Matrix Strategy)
+    │   ├─ Matrix Services
+    │   │    ├─ backend
+    │   │    └─ frontend
+    │   │
+    │   ├─ Docker Buildx Setup
+    │   ├─ Generate Image Tag using Git Commit SHA
+    │   ├─ Configure AWS Authentication (OIDC)
+    │   ├─ Login to Amazon ECR
+    │   ├─ Build Docker Images
+    │   ├─ Trivy Vulnerability Scan
+    │   └─ Push Images to Amazon ECR
+    │
+    └─ CI Pipeline Completed Successfully
+
+    ↓
+
+GitHub Actions Updates GitOps Repository
+    ↓
+Update Kubernetes Manifests (k8s/)
+    ├─ Update Backend Image Tag
+    ├─ Update Frontend Image Tag
+    └─ Pin Images using Git Commit SHA
+    ↓
+
+Commit & Push Updated Manifests to GitHub
+    ↓
+ArgoCD Watches Git Repository
+    ↓
+Detects Manifest Changes
+    ↓
+ArgoCD Reconciles Desired State
+    ↓
+Kubernetes Applies Updated Manifests
+    ├─ Deploy New Pods
+    ├─ Terminate Old Pods
+    └─ HPA Adjusts Replicas Automatically
+    ↓
+
+Application Updated on Amazon EKS Cluster
+```
+
+---
+
+## 3. Secrets Management Flow
+
+```text
+AWS Secrets Manager
+    ↓
+ASCP (AWS Secrets Manager Provider)
+    ↓
+Secrets Store CSI Driver
+    ↓
+SecretProviderClass Resource
+    ↓
+Mounted as Volume Inside Pod
+    ↓
+Backend Pod / MySQL StatefulSet Pod
+    ↓
+Backend / MySQL Access Credentials Available Securely
+```
+
+---
+
+## 4. Storage & Persistence Flow
+
+```text
+Kubernetes PersistentVolumeClaim (PVC)
+    ↓
+EBS CSI Driver
+    ↓
+Amazon EBS API
+    ↓
+Amazon EBS Volume (gp3) Provisioned
+    ↓
+PersistentVolume (PV) Created & Bound to PVC
+    ↓
+Mounted into MySQL StatefulSet Pod
+    ↓
+Persistent MySQL Storage
+```
+---
+
+## 5. Monitoring & Observability Flow
+
+```text
+Kubernetes Cluster
+    ↓
+Metrics Exporters & Resource Metrics
+    ├─ Application Metrics
+    ├─ Node Exporter Metrics
+    ├─ kube-state-metrics
+    └─ Kubernetes Metrics Server
+    ↓
+Prometheus Scrapes & Stores Metrics
+    ↓
+Grafana Pod Queries Prometheus
+
+────────────────────────
+
+DevOps Engineer
+    ↓
+grafana.cloud2devops.online
+    ↓
+Route53 DNS Resolution
+    ↓
+AWS Application Load Balancer (ALB)
+    ├─ ACM TLS Certificate Attached
+    └─ TLS Termination Happens Here
+    ↓
+ALB Listener Rules (Host-based Routing)
+    ↓
+Grafana Ingress Resource
+    ↓
+Grafana Service
+    ↓
+Grafana Pod
+    ↓
+Grafana Dashboards Visualize Metrics
+```
+---
+
+## 6. ArgoCD Access & GitOps Reconciliation Flow
+```text
+DevOps Engineer
+    ↓
+argocd.cloud2devops.online
+    ↓
+Route53 DNS Resolution
+    ↓
+AWS Application Load Balancer (ALB)
+    ├─ ACM TLS Certificate Attached
+    └─ TLS Termination Happens Here
+    ↓
+ALB Listener Rules (Host-based Routing)
+    ↓
+ArgoCD Ingress Resource
+    ↓
+argocd-server Service
+    ↓
+argocd-server Pod
+    ↓
+ArgoCD Watches Git Repository
+    ↓
+Detects Kubernetes Manifest Changes
+    ↓
+ArgoCD Reconciles Desired State
+    ↓
+Kubernetes Cluster State Updated
+```
 
 ---
 
@@ -333,22 +425,36 @@ This provides:
 
 ---
 
+## Kubernetes Components
+
+- Deployments
+- StatefulSets
+- Services
+- Ingress Resources
+- Horizontal Pod Autoscaler (HPA)
+- PersistentVolumeClaims (PVC)
+- ConfigMaps
+- ServiceAccounts
+- SecretProviderClass
+
+---
+
 ## Features
 
-- GitOps-based Kubernetes deployments
 - Terraform-managed AWS infrastructure
-- Secure GitHub OIDC authentication
 - Amazon EKS cluster provisioning
-- AWS-native ingress with ALB
+- GitOps-based Kubernetes deployments
+- ArgoCD automated reconciliation
+- GitHub Actions CI/CD pipelines
+- Secure GitHub OIDC authentication
+- AWS Application Load Balancer (ALB) ingress
 - Route53 DNS integration
 - ACM-managed HTTPS/TLS
-- Kubernetes Horizontal Pod Autoscaling
-- Dynamic EBS persistent storage provisioning
 - Secrets Manager integration using CSI Driver
+- Dynamic EBS persistent storage provisioning
+- Kubernetes Horizontal Pod Autoscaling
 - Immutable Docker image deployments
-- Automated GitHub Actions CI/CD pipelines
 - Security scanning integrated into CI
-- ArgoCD automated reconciliation
 - Monitoring stack deployment with Grafana & Prometheus
 - Production-style Kubernetes manifest orchestration using ArgoCD sync waves
 
@@ -371,7 +477,7 @@ This provides:
 
 The cluster includes:
 
-- **Prometheus** — Metrics collection and alerting
+- **Prometheus** — Metrics collection and querying
 - **Grafana** — Visualization dashboards
 - **Kubernetes Metrics Server** — Resource utilization metrics
 
@@ -379,7 +485,7 @@ Monitoring dashboards are exposed securely through AWS ALB Ingress with HTTPS en
 
 ---
 
-## Application, ArgoCD & Grafana Endpoints
+## Public Endpoints
 
 | Service | URL |
 |---|---|
@@ -387,6 +493,7 @@ Monitoring dashboards are exposed securely through AWS ALB Ingress with HTTPS en
 | ArgoCD Dashboard | https://argocd.cloud2devops.online |
 | Grafana Dashboard | https://grafana.cloud2devops.online |
 
+> Note: Public endpoints are exposed securely through AWS ALB with HTTPS termination using ACM-managed TLS certificates.
 ---
 
 ## Getting Started
@@ -397,14 +504,3 @@ Follow the documentation in this order to set up the complete platform:
 2. **[infra.md](infra.md)** — Provision VPC and EKS cluster using Terraform.
 3. **[deployment.md](deployment.md)** — Connect to EKS, verify add-ons, deploy ingress, configure IAM, and deploy the application via ArgoCD.
 4. **[github-actions.md](github-actions.md)** — Understand the CI/CD pipeline for automated builds and deployments.
-
----
-
-## Documentation
-
-| Document | Description |
-|---|---|
-| [prerequisites.md](prerequisites.md) | AWS, GitHub, Route53, ACM, and ECR setup |
-| [infra.md](infra.md) | Terraform infrastructure provisioning |
-| [deployment.md](deployment.md) | Application deployment and post-deployment steps |
-| [github-actions.md](github-actions.md) | CI/CD pipeline explanation |
